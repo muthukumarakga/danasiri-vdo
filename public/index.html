@@ -3,70 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DANASIRI | P2P ENGINE</title>
+    <title>DANASIRI | OBS MASTER</title>
     <style>
-        body { margin:0; background:#000; color:#00ffa3; font-family:'Courier New', monospace; overflow:hidden; }
-        #ui { position:fixed; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.8); padding:20px; border-left:4px solid #00ffa3; pointer-events: none; }
-        video { width:100vw; height:100vh; object-fit:cover; background:#050505; }
-        .active-ui { pointer-events: auto !important; margin-top:10px; }
-        .status-tag { font-size:12px; letter-spacing:2px; text-transform:uppercase; }
-        select, button { background:#000; color:#00ffa3; border:1px solid #00ffa3; padding:8px; cursor:pointer; font-family:monospace; }
+        body { margin:0; background:#000; color:#00ffa3; font-family:monospace; overflow:hidden; }
+        #ui { position:fixed; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.8); padding:15px; border-left:4px solid #00ffa3; }
+        video { width:100vw; height:100vh; object-fit:cover; }
+        .btn { background:#111; color:#00ffa3; border:1px solid #00ffa3; padding:10px; cursor:pointer; margin-top:8px; width:100%; font-family:monospace; }
+        .btn-danger { color: #ff4444; border-color: #ff4444; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div class="status-tag"><b>DANASIRI ENGINE v1.0</b></div>
-        <div id="room-display" style="font-size:24px; margin:5px 0;">ID: --</div>
-        <div id="status">CONNECTING TO SIGNALING...</div>
+        <strong style="font-size:18px;">DANASIRI ENGINE</strong><br>
+        <span id="status">STATUS: IDLE</span><br>
         
-        <div id="push-ui" class="active-ui" style="display:none;">
-            <label>QUALITY:</label>
-            <select id="bitrate">
-                <option value="2000">2 Mbps (HD)</option>
-                <option value="6000" selected>6 Mbps (EXTREME)</option>
-                <option value="12000">12 Mbps (ULTRA)</option>
+        <div id="push-controls" style="display:none;">
+            <select id="bitrate" class="btn">
+                <option value="6000">1080p | 6Mbps</option>
+                <option value="10000">1080p | 10Mbps</option>
             </select>
+            <button id="disconnectBtn" class="btn btn-danger">DISCONNECT</button>
         </div>
     </div>
-
-    <video id="mainVideo" autoplay playsinline></video>
+    <video id="v" autoplay playsinline muted></video>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io({ transports: ['websocket'] }); // Force WebSocket for Codespaces
+        const socket = io({ transports: ['websocket'] });
         const params = new URLSearchParams(window.location.search);
-        const role = params.get('role'); // 'push' or 'view'
+        const role = params.get('role');
         const roomId = window.location.pathname.split('/')[1] || 'lobby';
-        
-        document.getElementById('room-display').innerText = `ID: ${roomId.toUpperCase()}`;
-        const statusMsg = document.getElementById('status');
-        const videoEl = document.getElementById('mainVideo');
-        
+        const videoEl = document.getElementById('v');
+        const status = document.getElementById('status');
+
         let pc;
-        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        let localStream;
 
-        async function init() {
-            pc = new RTCPeerConnection(config);
+        async function start() {
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                iceCandidatePoolSize: 10
+            });
 
-            // ICE Handling
             pc.onicecandidate = (e) => {
                 if (e.candidate) socket.emit('signal', { roomId, content: { candidate: e.candidate } });
             };
 
             pc.onconnectionstatechange = () => {
-                statusMsg.innerText = `ICE STATE: ${pc.connectionState.toUpperCase()}`;
+                status.innerText = `ICE: ${pc.connectionState.toUpperCase()}`;
                 if(pc.connectionState === 'connected' && role === 'push') applyBitrate();
             };
 
             if (role === 'push') {
-                document.getElementById('push-ui').style.display = 'block';
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1920, height: 1080, frameRate: 60 }, 
-                    audio: true 
-                });
-                videoEl.srcObject = stream;
-                videoEl.muted = true;
-                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+                document.getElementById('push-controls').style.display = 'block';
+                
+                // BACK CAMERA & OBS RESOLUTION CONFIG
+                const constraints = {
+                    video: {
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        aspectRatio: 1.777777778, // Force 16:9 for OBS
+                        facingMode: { ideal: "environment" }, // BACK CAMERA
+                        frameRate: { ideal: 60 }
+                    },
+                    audio: true
+                };
+
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    videoEl.srcObject = localStream;
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                } catch (e) {
+                    alert("Camera Error: " + e.message);
+                }
+
+                document.getElementById('disconnectBtn').onclick = disconnect;
             } else {
                 pc.ontrack = (e) => { videoEl.srcObject = e.streams[0]; };
             }
@@ -74,10 +85,23 @@
             socket.emit('join-room', roomId);
         }
 
-        // Handshake Logic
+        // DISCONNECT LOGIC
+        function disconnect() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (pc) {
+                pc.close();
+            }
+            socket.disconnect();
+            status.innerText = "STATUS: DISCONNECTED";
+            videoEl.srcObject = null;
+            setTimeout(() => location.reload(), 2000); // Reload to reset state
+        }
+
+        // SIGNALING
         socket.on('peer-joined', async () => {
             if (role === 'push') {
-                statusMsg.innerText = "PEER LINKED. SENDING OFFER...";
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 socket.emit('signal', { roomId, content: { sdp: offer } });
@@ -93,29 +117,21 @@
                     socket.emit('signal', { roomId, content: { sdp: answer } });
                 }
             } else if (data.candidate) {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(console.warn);
+                pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.error(e));
             }
         });
 
         async function applyBitrate() {
-            const kbps = document.getElementById('bitrate').value;
             const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 const p = sender.getParameters();
-                if (!p.encodings) p.encodings = [{}];
-                p.encodings[0].maxBitrate = kbps * 1000;
+                p.encodings[0].maxBitrate = document.getElementById('bitrate').value * 1000;
                 await sender.setParameters(p);
-                statusMsg.innerText = `LINK STABLE @ ${kbps}KBPS`;
             }
         }
 
         document.getElementById('bitrate').onchange = applyBitrate;
-
-        // Auto-start
-        init().catch(err => {
-            statusMsg.innerText = "HARDWARE ERROR: CHECK PERMISSIONS";
-            console.error(err);
-        });
+        start();
     </script>
 </body>
 </html>
