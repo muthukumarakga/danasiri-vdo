@@ -1,81 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Danasiri | P2P</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Danasiri Broadcast</title>
     <style>
-        body { margin:0; background:#000; color:#0bdf7e; font-family:sans-serif; overflow:hidden; }
-        #ui { position:fixed; top:20px; left:20px; z-index:10; background:rgba(0,0,0,0.7); padding:15px; border-left:3px solid #0bdf7e; }
-        video { width:100vw; height:100vh; object-fit:cover; }
-        .btn { background:#0bdf7e; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; }
+        body { margin:0; background:#050505; color:#00ffa3; font-family:'Segoe UI', Tahoma, sans-serif; overflow:hidden; }
+        #danasiri-ui { position:fixed; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.85); padding:20px; border-left:4px solid #00ffa3; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        video { width:100vw; height:100vh; object-fit:cover; background:#000; }
+        .controls { margin-top:15px; display:flex; gap:10px; flex-direction:column; }
+        select, button { background:#111; color:#00ffa3; border:1px solid #00ffa3; padding:10px; cursor:pointer; font-weight:bold; text-transform:uppercase; font-size:12px; }
+        button:hover { background:#00ffa3; color:#000; }
+        #status { font-size:11px; opacity:0.7; letter-spacing:1px; }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <strong>DANASIRI</strong> | <span id="roomName"></span><br>
-        <small id="status">Initializing...</small><br><br>
-        <button id="muteBtn" class="btn" style="display:none;">MUTE REMOTE</button>
+    <div id="danasiri-ui">
+        <strong style="font-size:18px; letter-spacing:3px;">DANASIRI</strong><br>
+        <span id="room-id-display"></span><br>
+        <span id="status">INITIALIZING ENGINE...</span>
+        
+        <div id="push-controls" class="controls" style="display:none;">
+            <label style="font-size:10px;">ENCODER QUALITY:</label>
+            <select id="bitrate">
+                <option value="2000">Standard HD (2 Mbps)</option>
+                <option value="6000" selected>Extreme 1080p (6 Mbps)</option>
+                <option value="15000">Ultra 4K (15 Mbps)</option>
+            </select>
+        </div>
+
+        <div id="view-controls" class="controls" style="display:none;">
+            <button id="remote-mute">Toggle Remote Mute</button>
+        </div>
     </div>
+
     <video id="v" autoplay playsinline></video>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const urlParams = new URLSearchParams(window.location.search);
-        const role = urlParams.get('role'); // 'push' or 'view'
-        const roomId = window.location.pathname.split('/')[1] || 'lobby';
+        const params = new URLSearchParams(window.location.search);
+        const role = params.get('role'); // 'push' or 'view'
+        const roomId = window.location.pathname.split('/')[1] || 'default';
         
-        document.getElementById('roomName').innerText = roomId.toUpperCase();
+        document.getElementById('room-id-display').innerText = `CHANNEL: ${roomId.toUpperCase()}`;
         const status = document.getElementById('status');
-        const videoElement = document.getElementById('v');
+        const video = document.getElementById('v');
         
         let pc;
-        let dataChannel;
-        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        let controlChannel;
+        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-        async function init() {
-            pc = new RTCPeerConnection(config);
+        async function start() {
+            pc = new RTCPeerConnection(iceConfig);
 
-            // 1. ICE Candidate handling
-            pc.onicecandidate = (e) => {
-                if (e.candidate) socket.emit('signal', { roomId, content: { candidate: e.candidate } });
+            // Handle ICE
+            pc.onicecandidate = ({candidate}) => {
+                if (candidate) socket.emit('signal', { roomId, content: { candidate } });
             };
 
             if (role === 'push') {
-                // PHONE SIDE logic
-                status.innerText = "Role: CAMERA (Pushing)";
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720, frameRate: 30 }, audio: true 
-                });
-                videoElement.srcObject = stream;
-                videoElement.muted = true;
-                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+                document.getElementById('push-controls').style.display = 'flex';
+                status.innerText = "MODE: CAMERA PUSH";
                 
-                // Listen for remote control
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
+                    audio: true
+                });
+                video.srcObject = stream;
+                video.muted = true;
+                stream.getTracks().forEach(t => pc.addTrack(t, stream));
+
+                // Listen for Director commands
                 pc.ondatachannel = (e) => {
                     e.channel.onmessage = (msg) => {
-                        const data = JSON.parse(msg.data);
-                        if(data.type === 'MUTE') stream.getAudioTracks()[0].enabled = !data.value;
+                        const cmd = JSON.parse(msg.data);
+                        if(cmd.type === 'MUTE') stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
                     };
                 };
+
+                // Apply bitrate when connected
+                pc.onconnectionstatechange = () => {
+                    if(pc.connectionState === 'connected') updateBitrate();
+                };
             } else {
-                // OBS SIDE logic
-                status.innerText = "Role: OBS (Viewing)";
-                document.getElementById('muteBtn').style.display = 'block';
-                dataChannel = pc.createDataChannel("control");
+                document.getElementById('view-controls').style.display = 'flex';
+                status.innerText = "MODE: OBS RECEIVER";
                 
-                pc.ontrack = (e) => { videoElement.srcObject = e.streams[0]; };
+                controlChannel = pc.createDataChannel("danasiri-control");
+                pc.ontrack = (e) => video.srcObject = e.streams[0];
                 
-                document.getElementById('muteBtn').onclick = () => {
-                    dataChannel.send(JSON.stringify({type: 'MUTE', value: true}));
-                    status.innerText = "Sent Mute Command";
+                document.getElementById('remote-mute').onclick = () => {
+                    if(controlChannel.readyState === 'open') {
+                        controlChannel.send(JSON.stringify({type: 'MUTE'}));
+                        status.innerText = "COMMAND: MUTE SENT";
+                    }
                 };
             }
 
             socket.emit('join-room', roomId);
         }
 
-        // Signaling Handlers
-        socket.on('user-joined', async () => {
+        // Bitrate Controller
+        async function updateBitrate() {
+            const kbps = document.getElementById('bitrate').value;
+            const sender = pc.getSenders().find(s => s.track.kind === 'video');
+            if (sender) {
+                const p = sender.getParameters();
+                if (!p.encodings) p.encodings = [{}];
+                p.encodings[0].maxBitrate = kbps * 1000;
+                await sender.setParameters(p);
+                status.innerText = `STREAMING @ ${kbps} KBPS`;
+            }
+        }
+
+        document.getElementById('bitrate').onchange = updateBitrate;
+
+        // Signaling Logic
+        socket.on('peer-ready', async () => {
             if (role === 'push') {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
@@ -96,7 +138,7 @@
             }
         });
 
-        init();
+        start();
     </script>
 </body>
 </html>
