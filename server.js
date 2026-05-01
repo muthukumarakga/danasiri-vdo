@@ -2,28 +2,42 @@ const express = require('express');
 const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http, { cors: { origin: "*" } });
+const io = require('socket.io')(http, {
+    cors: { origin: "*" },
+    methods: ["GET", "POST"]
+});
 
 app.use(express.static('public'));
 
-// Catch-all route for branding (e.g., yourdomain.com/danasiri)
+// Vanity Route: Served as /roomName
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 io.on('connection', (socket) => {
+    console.log('Engine Link Established:', socket.id);
+
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        socket.to(roomId).emit('peer-ready', socket.id);
+        console.log(`User ${socket.id} joined address: ${roomId}`);
+        // Notify others in the room
+        socket.to(roomId).emit('peer-joined', socket.id);
     });
 
     socket.on('signal', (data) => {
-        socket.to(data.roomId).emit('signal', {
-            sender: socket.id,
-            content: data.content
-        });
+        // Relay signaling (Offer/Answer/ICE)
+        socket.to(data.roomId).emit('signal', data.content);
     });
+
+    socket.on('disconnect', () => console.log('Link Severed:', socket.id));
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => console.log(`Danasiri Engine Active on Port ${PORT}`));
+const PORT = 3000;
+http.listen(PORT, '0.0.0.0', () => {
+    console.log(`
+    ======================================
+    DANASIRI ENGINE ACTIVE
+    PORT: ${PORT}
+    ======================================
+    `);
+});
