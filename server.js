@@ -6,7 +6,7 @@ const io = require('socket.io')(http, { cors: { origin: "*" } });
 
 app.use(express.static('public'));
 
-// The "Vanity" Route: Any path (e.g., /danasiri) serves our master file
+// Catch-all route for branding (e.g., yourdomain.com/danasiri)
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -14,8 +14,7 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        // Alert the other user in the room to start negotiation
-        socket.to(roomId).emit('user-joined', socket.id);
+        socket.to(roomId).emit('peer-ready', socket.id);
     });
 
     socket.on('signal', (data) => {
@@ -27,4 +26,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => console.log(`Danasiri running on port ${PORT}`));
+http.listen(PORT, '0.0.0.0', () => console.log(`Danasiri Engine Active on Port ${PORT}`));
