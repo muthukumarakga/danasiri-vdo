@@ -1,106 +1,196 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DANASIRI ENGINE</title>
+    <title>DANASIRI | LIVE STUDIO</title>
     <style>
-        body { margin:0; background:#000; color:#00ffa3; font-family:monospace; overflow:hidden; }
-        #ui { position:fixed; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.8); padding:15px; border-left:4px solid #00ffa3; }
-        video { width:100vw; height:100vh; object-fit:cover; }
-        .btn { background:#111; color:#00ffa3; border:1px solid #00ffa3; padding:10px; cursor:pointer; margin-top:10px; width:100%; font-family:monospace; }
-        .btn-danger { color: #ff4444; border-color: #ff4444; }
+        body { margin:0; background:#050505; color:#00ffa3; font-family:monospace; overflow:hidden; }
+        #ui { position:fixed; top:10px; left:10px; z-index:100; background:rgba(0,0,0,0.85); padding:15px; border-radius:8px; border: 1px solid #333; width: 260px; }
+        video { width:100vw; height:100vh; object-fit:cover; background:#000; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 15px; }
+        .btn { background:#1a1a1a; color:#fff; border:1px solid #444; padding:10px 5px; cursor:pointer; font-size:11px; border-radius:4px; font-weight:bold; transition: 0.2s; }
+        .btn.active { background: #00ffa3; color: #000; border-color: #00ffa3; }
+        .btn-danger { color:#ff4444; border-color:#ff4444; }
+        .slider-container { margin-top: 10px; font-size: 11px; color: #ccc; }
+        input[type=range] { width: 100%; margin-top: 5px; accent-color: #00ffa3; }
+        hr { border:0; border-top:1px solid #333; margin:15px 0; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <strong style="font-size:1.2em;">DANASIRI ENGINE</strong><br>
-        <span id="status">STATUS: IDLE</span>
+        <strong style="font-size:1.2em; color:#fff; letter-spacing:1px;">STUDIO ENGINE</strong><br>
+        <small>NET: <span id="status" style="color:#00ffa3;">WAITING FOR PEER...</span></small>
+        
         <div id="push-ui" style="display:none;">
-            <select id="bitrate" class="btn">
-                <option value="6000">1080p | 6 Mbps</option>
-                <option value="12000">1080p | 12 Mbps</option>
-            </select>
-            <button id="disconnectBtn" class="btn btn-danger">DISCONNECT</button>
+            <hr>
+            <div class="slider-container">
+                BITRATE: <span id="bitrate-val" style="color:#fff; font-weight:bold;">8000</span> kbps
+                <input type="range" id="bitrate" min="2000" max="15000" step="500" value="8000">
+            </div>
+
+            <div class="grid-2">
+                <button id="toggleMic" class="btn active">🎤 MIC ON</button>
+                <button id="toggleCam" class="btn active">📷 CAM ON</button>
+                <button id="switchCam" class="btn">🔄 FLIP CAM</button>
+                <button id="disconnectBtn" class="btn btn-danger">⏹ END LIVE</button>
+            </div>
         </div>
     </div>
+
     <video id="v" autoplay playsinline muted></video>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io({ transports: ['websocket'] });
-        const params = new URLSearchParams(window.location.search);
-        const role = params.get('role');
+        const role = new URLSearchParams(window.location.search).get('role');
         const roomId = window.location.pathname.split('/')[1] || 'lobby';
+        
         const videoEl = document.getElementById('v');
-        const status = document.getElementById('status');
-
+        const statusEl = document.getElementById('status');
+        
         let pc;
         let localStream;
+        let currentFacingMode = "environment"; // Back camera default
+
+        // ========================================================
+        // 🚨 TURN SERVER CONFIG (REQUIRED FOR AP ISOLATION) 🚨
+        // ========================================================
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                // REPLACE THIS BLOCK WITH YOUR METERED.CA CREDENTIALS:
+                {
+                   urls: 'turn:YOUR_URL.metered.ca:80',
+                   username: 'YOUR_USERNAME',
+                   credential: 'YOUR_PASSWORD'
+                }
+            ],
+            iceTransportPolicy: 'all', 
+            iceCandidatePoolSize: 10
+        };
 
         async function init() {
-            pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            pc = new RTCPeerConnection(config);
 
             pc.onicecandidate = (e) => {
                 if (e.candidate) socket.emit('signal', { roomId, content: { candidate: e.candidate } });
             };
 
             pc.onconnectionstatechange = () => {
-                status.innerText = `ICE: ${pc.connectionState.toUpperCase()}`;
-                if(pc.connectionState === 'connected' && role === 'push') applyBitrate();
+                statusEl.innerText = pc.connectionState.toUpperCase();
+                if(pc.connectionState === 'connected' && role === 'push') updateVideoQuality();
             };
 
             if (role === 'push') {
                 document.getElementById('push-ui').style.display = 'block';
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1920, height: 1080, aspectRatio: 1.777, facingMode: "environment" },
-                    audio: true
-                });
-                videoEl.srcObject = localStream;
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                await startCamera();
             } else {
+                videoEl.muted = false; 
                 pc.ontrack = (e) => { videoEl.srcObject = e.streams[0]; };
             }
+
             socket.emit('join-room', roomId);
         }
 
+        async function startCamera() {
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, facingMode: { ideal: currentFacingMode } },
+                    audio: { echoCancellation: false, noiseSuppression: false } 
+                });
+                videoEl.srcObject = localStream;
+
+                if (pc.getSenders().length > 0) {
+                    const videoTrack = localStream.getVideoTracks()[0];
+                    const sender = pc.getSenders().find(s => s.track.kind === 'video');
+                    if (sender) sender.replaceTrack(videoTrack);
+                } else {
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                }
+            } catch (err) {
+                statusEl.innerText = "CAMERA ERROR";
+                statusEl.style.color = "#ff4444";
+            }
+        }
+
+        // --- HANDSHAKE ---
         socket.on('peer-ready', () => {
-            if (role === 'view') socket.emit('signal', { roomId, content: { type: 'start' } });
+            if (role === 'view') socket.emit('signal', { roomId, content: { type: 'RESTART' } });
         });
 
         socket.on('signal', async (data) => {
-            if (data.type === 'start' && role === 'push') {
+            if (data.type === 'RESTART' && role === 'push') {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 socket.emit('signal', { roomId, content: { sdp: offer } });
-            } else if (data.sdp) {
+            } 
+            else if (data.sdp) {
                 await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
                 if (data.sdp.type === 'offer') {
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     socket.emit('signal', { roomId, content: { sdp: answer } });
                 }
-            } else if (data.candidate) {
+            } 
+            else if (data.candidate) {
                 pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
             }
         });
 
-        async function applyBitrate() {
+        // --- CONTROLS ---
+        async function updateVideoQuality() {
             const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 const p = sender.getParameters();
-                p.encodings[0].maxBitrate = document.getElementById('bitrate').value * 1000;
+                if (!p.encodings) p.encodings = [{}];
+                
+                const bitrate = document.getElementById('bitrate').value;
+                document.getElementById('bitrate-val').innerText = bitrate;
+
+                p.encodings[0].maxBitrate = bitrate * 1000;
+                p.encodings[0].scaleResolutionDownBy = 1.0; 
+                p.encodings[0].priority = "high"; 
+
                 await sender.setParameters(p);
             }
         }
 
+        document.getElementById('bitrate').oninput = updateVideoQuality;
+
+        document.getElementById('toggleMic').onclick = (e) => {
+            const track = localStream.getAudioTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                e.target.innerText = track.enabled ? "🎤 MIC ON" : "🔇 MIC MUTED";
+                e.target.className = track.enabled ? "btn active" : "btn btn-danger";
+            }
+        };
+
+        document.getElementById('toggleCam').onclick = (e) => {
+            const track = localStream.getVideoTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                e.target.innerText = track.enabled ? "📷 CAM ON" : "🚫 CAM OFF";
+                e.target.className = track.enabled ? "btn active" : "btn btn-danger";
+            }
+        };
+
+        document.getElementById('switchCam').onclick = async () => {
+            currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+            await startCamera();
+        };
+
         document.getElementById('disconnectBtn').onclick = () => {
             if(localStream) localStream.getTracks().forEach(t => t.stop());
-            pc.close();
+            if(pc) pc.close();
+            socket.disconnect();
             location.reload();
         };
 
-        init();
+        if(role) init();
     </script>
 </body>
 </html>
