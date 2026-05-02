@@ -16,6 +16,7 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
+        // Alert the room that someone is ready to sync
         socket.to(roomId).emit('peer-ready', socket.id);
     });
 
@@ -26,5 +27,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`DANASIRI ENGINE ACTIVE ON PORT ${PORT}`);
+    console.log(`[DANASIRI STUDIO] SYSTEM LIVE ON PORT ${PORT}`);
 });
