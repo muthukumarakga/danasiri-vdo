@@ -3,24 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DANASIRI | LIVE STUDIO</title>
+    <title>DANASIRI | PRO LIVE</title>
     <style>
         body { margin:0; background:#050505; color:#00ffa3; font-family:monospace; overflow:hidden; }
-        #ui { position:fixed; top:10px; left:10px; z-index:100; background:rgba(0,0,0,0.85); padding:15px; border-radius:8px; border: 1px solid #333; width: 260px; }
+        #ui { position:fixed; top:10px; left:10px; z-index:100; background:rgba(0,0,0,0.9); padding:15px; border-radius:8px; border: 1px solid #333; width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         video { width:100vw; height:100vh; object-fit:cover; background:#000; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 15px; }
-        .btn { background:#1a1a1a; color:#fff; border:1px solid #444; padding:10px 5px; cursor:pointer; font-size:11px; border-radius:4px; font-weight:bold; transition: 0.2s; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
+        .btn { background:#1a1a1a; color:#fff; border:1px solid #444; padding:10px 5px; cursor:pointer; font-size:11px; border-radius:4px; font-weight:bold; text-transform: uppercase; }
         .btn.active { background: #00ffa3; color: #000; border-color: #00ffa3; }
         .btn-danger { color:#ff4444; border-color:#ff4444; }
         .slider-container { margin-top: 10px; font-size: 11px; color: #ccc; }
-        input[type=range] { width: 100%; margin-top: 5px; accent-color: #00ffa3; }
+        input[type=range] { width: 100%; margin-top: 8px; accent-color: #00ffa3; cursor: pointer; }
         hr { border:0; border-top:1px solid #333; margin:15px 0; }
+        .stat-label { color: #888; font-size: 10px; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <strong style="font-size:1.2em; color:#fff; letter-spacing:1px;">STUDIO ENGINE</strong><br>
-        <small>NET: <span id="status" style="color:#00ffa3;">WAITING FOR PEER...</span></small>
+        <strong style="font-size:1.2em; color:#fff; letter-spacing:1px;">DANASIRI ENGINE</strong><br>
+        <span class="stat-label">NETWORK:</span> <span id="status">INITIALIZING...</span>
         
         <div id="push-ui" style="display:none;">
             <hr>
@@ -51,22 +52,36 @@
         
         let pc;
         let localStream;
-        let currentFacingMode = "environment"; // Back camera default
+        let currentFacingMode = "environment";
 
-        // ========================================================
-        // 🚨 TURN SERVER CONFIG (REQUIRED FOR AP ISOLATION) 🚨
-        // ========================================================
+        // ==========================================
+        // ✅ VERIFIED TURN CONFIGURATION
+        // ==========================================
         const config = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                // REPLACE THIS BLOCK WITH YOUR METERED.CA CREDENTIALS:
+                { urls: "stun:stun.relay.metered.ca:80" },
                 {
-                   urls: 'turn:YOUR_URL.metered.ca:80',
-                   username: 'YOUR_USERNAME',
-                   credential: 'YOUR_PASSWORD'
+                    urls: "turn:global.relay.metered.ca:80",
+                    username: "101d4507c88455da847c6923",
+                    credential: "mCRxx8b40O+Flt6A",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                    username: "101d4507c88455da847c6923",
+                    credential: "mCRxx8b40O+Flt6A",
+                },
+                {
+                    urls: "turn:global.relay.metered.ca:443",
+                    username: "101d4507c88455da847c6923",
+                    credential: "mCRxx8b40O+Flt6A",
+                },
+                {
+                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                    username: "101d4507c88455da847c6923",
+                    credential: "mCRxx8b40O+Flt6A",
                 }
             ],
-            iceTransportPolicy: 'all', 
+            iceTransportPolicy: 'all',
             iceCandidatePoolSize: 10
         };
 
@@ -79,6 +94,7 @@
 
             pc.onconnectionstatechange = () => {
                 statusEl.innerText = pc.connectionState.toUpperCase();
+                if(pc.connectionState === 'connected') statusEl.style.color = "#00ffa3";
                 if(pc.connectionState === 'connected' && role === 'push') updateVideoQuality();
             };
 
@@ -95,14 +111,12 @@
 
         async function startCamera() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
-
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, facingMode: { ideal: currentFacingMode } },
                     audio: { echoCancellation: false, noiseSuppression: false } 
                 });
                 videoEl.srcObject = localStream;
-
                 if (pc.getSenders().length > 0) {
                     const videoTrack = localStream.getVideoTracks()[0];
                     const sender = pc.getSenders().find(s => s.track.kind === 'video');
@@ -116,7 +130,6 @@
             }
         }
 
-        // --- HANDSHAKE ---
         socket.on('peer-ready', () => {
             if (role === 'view') socket.emit('signal', { roomId, content: { type: 'RESTART' } });
         });
@@ -140,20 +153,16 @@
             }
         });
 
-        // --- CONTROLS ---
         async function updateVideoQuality() {
             const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 const p = sender.getParameters();
                 if (!p.encodings) p.encodings = [{}];
-                
                 const bitrate = document.getElementById('bitrate').value;
                 document.getElementById('bitrate-val').innerText = bitrate;
-
                 p.encodings[0].maxBitrate = bitrate * 1000;
                 p.encodings[0].scaleResolutionDownBy = 1.0; 
                 p.encodings[0].priority = "high"; 
-
                 await sender.setParameters(p);
             }
         }
