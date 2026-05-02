@@ -1,1 +1,11 @@
-
+{
+    "name": "Danasiri Engine",
+    "portsAttributes": {
+        "3000": {
+            "label": "Danasiri Signaling",
+            "onAutoForward": "openBrowser",
+            "visibility": "public"
+        }
+    },
+    "forwardPorts": [3000]
+}
