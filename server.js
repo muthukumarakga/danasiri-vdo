@@ -24,8 +24,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// CRITICAL: process.env.PORT allows the host (Railway) to assign the port
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`Danasiri Engine Production Live on Port ${PORT}`);
+    console.log(`DANASIRI ENGINE ACTIVE ON PORT ${PORT}`);
 });
