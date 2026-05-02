@@ -16,22 +16,16 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        console.log(`User ${socket.id} joined room: ${roomId}`);
-        // Alert the room that someone is ready
         socket.to(roomId).emit('peer-ready', socket.id);
     });
 
     socket.on('signal', (data) => {
-        // Relays: offer, answer, ice-candidates, or custom triggers
         socket.to(data.roomId).emit('signal', data.content);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
     });
 });
 
+// CRITICAL: process.env.PORT allows the host (Railway) to assign the port
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`DANASIRI ENGINE RUNNING ON PORT ${PORT}`);
+    console.log(`Danasiri Engine Production Live on Port ${PORT}`);
 });
