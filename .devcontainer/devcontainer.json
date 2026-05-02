@@ -1,11 +1,11 @@
 {
-    "name": "Danasiri Engine",
+    "name": "Danasiri Studio",
+    "forwardPorts": [3000],
     "portsAttributes": {
         "3000": {
-            "label": "Danasiri Signaling",
-            "onAutoForward": "openBrowser",
+            "label": "Live Stream Engine",
+            "onAutoForward": "notify",
             "visibility": "public"
         }
-    },
-    "forwardPorts": [3000]
+    }
 }
