@@ -1,7 +1,7 @@
 {
-  "name": "danasiri-engine",
-  "version": "1.0.0",
-  "description": "P2P WebRTC Signaling Server",
+  "name": "danasiri-studio",
+  "version": "2.0.0",
+  "description": "Pro WebRTC Signaling Server",
   "main": "server.js",
   "dependencies": {
     "express": "^4.18.2",
