@@ -122,15 +122,26 @@
 
         // --- CONTROLS ---
 
-        async function applyBitrate() {
-            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-                const p = sender.getParameters();
-                p.encodings[0].maxBitrate = document.getElementById('bitrate').value * 1000;
-                await sender.setParameters(p);
-                console.log("Bitrate set to:", document.getElementById('bitrate').value);
-            }
-        }
+       async function applyBitrate() {
+    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (sender) {
+        const p = sender.getParameters();
+        if (!p.encodings) p.encodings = [{}];
+
+        // 1. Force the high bitrate
+        p.encodings[0].maxBitrate = document.getElementById('bitrate').value * 1000;
+        
+        // 2. Disable resolution scaling (Stops the "blurriness")
+        // This forces the browser to stay at 1080p even if the signal drops slightly
+        p.encodings[0].scaleResolutionDownBy = 1.0; 
+        
+        // 3. Set priority to high
+        p.encodings[0].priority = "high";
+
+        await sender.setParameters(p);
+        console.log("HD Quality Locked");
+    }
+}
 
         function disconnect() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
