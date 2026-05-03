@@ -4,10 +4,8 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, { cors: { origin: "*" } });
 const path = require('path');
 
-// Crucial: This tells the server to look in the 'public' folder for index.html
 app.use(express.static('public'));
 
-// Enables custom room names in the URL
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -15,10 +13,12 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        socket.to(roomId).emit('peer-ready');
+        // Tell the broadcaster a viewer is ready to receive
+        socket.to(roomId).emit('peer-ready'); 
     });
 
     socket.on('signal', (data) => {
+        // Pass WebRTC signals (SDP/Candidates) between push and view
         socket.to(data.roomId).emit('signal', data.content);
     });
 });
