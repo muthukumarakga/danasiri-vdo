@@ -5,117 +5,238 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DANASIRI | PRO STUDIO</title>
     <style>
-        :root { --accent: #00ffa3; --bg: #0a0a0a; }
-        body { margin:0; background: var(--bg); color: #eee; font-family: sans-serif; overflow:hidden; }
-        #v { width:100vw; height:100vh; object-fit:cover; position:fixed; top:0; left:0; z-index:1; }
+        :root { --accent: #00ffa3; --bg: #0a0a0a; --panel: rgba(15, 15, 15, 0.95); }
+        body { margin:0; background: var(--bg); color: #eee; font-family: 'Segoe UI', sans-serif; overflow:hidden; }
+        
+        /* Clean Video Feed */
+        #v { width:100vw; height:100vh; object-fit:cover; background:#000; position:fixed; top:0; left:0; z-index:1; }
+        
+        /* Pro UI Overlay */
         #push-ui { 
             position:fixed; top:20px; left:20px; z-index:100; 
-            background: rgba(15,15,15,0.9); padding:15px; border-radius:12px; 
-            border: 1px solid #333; width: 260px;
+            background: var(--panel); padding:15px; border-radius:12px; 
+            border: 1px solid #333; width: 280px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
         }
-        .label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; display:block; }
-        select, button { width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; cursor: pointer; }
-        .btn-apply { border-color: var(--accent); color: var(--accent); font-weight: bold; }
-        input[type=range] { width: 100%; accent-color: var(--accent); }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .logo { color: var(--accent); font-weight: bold; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .status-dot { width:8px; height:8px; border-radius:50%; background:#ff4444; box-shadow: 0 0 10px #ff4444; }
+        
+        .setting-group { margin-bottom: 12px; }
+        label { display: block; font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; }
+        
+        select, .btn { 
+            width: 100%; background: #222; color: #fff; border: 1px solid #444; 
+            padding: 10px; border-radius: 6px; font-size: 12px; outline: none;
+        }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .btn { cursor: pointer; font-weight: bold; transition: 0.2s; background: #333; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { border-color: var(--accent); color: var(--accent); }
+        .btn.active { background: var(--accent); color: #000; }
+        
+        #stats { font-size: 9px; color: #666; margin-top: 10px; display: flex; justify-content: space-between; border-top: 1px solid #333; padding-top: 8px; }
+        input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; margin-top: 5px; }
+        
+        #adv-drawer { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #444; }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline muted></video>
 
     <div id="push-ui">
-        <div style="color:var(--accent); font-weight:bold; margin-bottom:15px;">DANASIRI PRO v2</div>
-        <span class="label">Hardware Lens</span>
-        <select id="cameraSelect"></select>
-        <span class="label">Aspect Ratio</span>
-        <select id="aspectSelect">
-            <option value="1.7777777778">16:9 Widescreen</option>
-            <option value="0.5625">9:16 Vertical</option>
-            <option value="1.3333333333">4:3 Standard</option>
-        </select>
-        <span class="label">Zoom Control</span>
-        <input type="range" id="zoom" min="1" max="10" step="0.1" value="1">
-        <button id="refreshBtn" class="btn-apply">APPLY SETTINGS</button>
+        <header>
+            <div class="logo">Danasiri Studio v2</div>
+            <div id="status-dot" class="status-dot"></div>
+        </header>
+
+        <div class="setting-group">
+            <label>Camera Lens (Back 0, 1, 2)</label>
+            <select id="cameraSelect"><option>Detecting Hardware...</option></select>
+        </div>
+
+        <div class="setting-group">
+            <label>Aspect Ratio</label>
+            <select id="aspectSelect">
+                <option value="1.7777777778">16:9 (Widescreen)</option>
+                <option value="0.5625">9:16 (Vertical)</option>
+                <option value="1.3333333333">4:3 (Photo)</option>
+                <option value="1">1:1 (Square)</option>
+            </select>
+        </div>
+
+        <div class="grid">
+            <button id="toggleMic" class="btn active">Audio ON</button>
+            <button id="toggleCam" class="btn active">Video ON</button>
+            <button id="showAdv" class="btn btn-primary" style="grid-column: span 2;">Advanced Hardware</button>
+        </div>
+
+        <div id="adv-drawer">
+            <div class="setting-group">
+                <div style="display:flex; justify-content:space-between;">
+                    <label>Zoom</label><span id="zVal" style="font-size:10px;">1x</span>
+                </div>
+                <input type="range" id="zoom" min="1" max="10" step="0.1" value="1">
+            </div>
+            <div class="setting-group">
+                <div style="display:flex; justify-content:space-between;">
+                    <label>Bitrate (kbps)</label><span id="bVal" style="font-size:10px;">8000</span>
+                </div>
+                <input type="range" id="bitrate" min="1000" max="20000" step="500" value="8000">
+            </div>
+            <button id="toggleTorch" class="btn" style="display:none;">Flashlight</button>
+        </div>
+
+        <div id="stats">
+            <span id="s-res">0x0</span>
+            <span id="s-fps">0 FPS</span>
+            <span id="s-bit">0 kbps</span>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io({ transports: ['websocket'] });
+        const params = new URLSearchParams(window.location.search);
+        const role = params.get('role') || 'push';
         const roomId = window.location.pathname.split('/')[1] || 'lobby';
-        const role = new URLSearchParams(window.location.search).get('role') || 'push';
+        
         let pc, localStream, videoTrack;
+        const videoEl = document.getElementById('v');
 
-        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        const rtcConfig = {
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        };
 
         async function init() {
             pc = new RTCPeerConnection(rtcConfig);
             
-            // Send ICE candidates to the other peer
             pc.onicecandidate = (e) => e.candidate && socket.emit('signal', { roomId, content: { candidate: e.candidate } });
             
-            // For the viewer: catch the incoming stream
-            pc.ontrack = (e) => {
-                if (role === 'view') document.getElementById('v').srcObject = e.streams[0];
+            pc.onconnectionstatechange = () => {
+                document.getElementById('status-dot').style.background = pc.connectionState === 'connected' ? '#00ffa3' : '#ff4444';
+                if(pc.connectionState === 'connected') startStats();
             };
 
             if (role === 'push') {
-                await setupCamera();
+                await enumerateCameras();
+                await startCamera();
             } else {
-                // Viewer mode: hide UI and unmute audio
-                document.getElementById('push-ui').style.display = 'none';
-                document.getElementById('v').muted = false;
+                document.getElementById('push-ui').style.display = 'none'; // Hide UI for viewers
+                videoEl.muted = false;
+                pc.ontrack = (e) => { videoEl.srcObject = e.streams[0]; };
             }
-
+            
             socket.emit('join-room', roomId);
         }
 
-        async function setupCamera() {
+        async function enumerateCameras() {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const vids = devices.filter(d => d.kind === 'videoinput');
             const sel = document.getElementById('cameraSelect');
-            sel.innerHTML = vids.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
-            await startCam();
+            sel.innerHTML = '';
+            vids.forEach((d, i) => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `Camera ${i}`;
+                sel.appendChild(opt);
+            });
         }
 
-        async function startCam() {
+        async function startCamera() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
+            
             const constraints = {
+                audio: true,
                 video: {
                     deviceId: { exact: document.getElementById('cameraSelect').value },
-                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) }
-                },
-                audio: true
+                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) },
+                    width: { ideal: 1920 }
+                }
             };
-            localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            document.getElementById('v').srcObject = localStream;
-            videoTrack = localStream.getVideoTracks()[0];
-            
-            // Add tracks to the peer connection
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = localStream;
+                videoTrack = localStream.getVideoTracks()[0];
+                
+                // Hardware Caps
+                const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                if (caps.zoom) {
+                    const z = document.getElementById('zoom');
+                    z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step;
+                }
+                document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
+
+                const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+                if (sender) sender.replaceTrack(videoTrack);
+                else localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+                
+                applyBitrate();
+            } catch (e) { console.error(e); }
         }
 
-        // --- Signaling Logic ---
-        socket.on('peer-ready', async () => {
-            if (role === 'push') {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                socket.emit('signal', { roomId, content: { sdp: offer } });
-            }
-        });
+        async function applyBitrate() {
+            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (!sender) return;
+            const params = sender.getParameters();
+            const bit = document.getElementById('bitrate').value;
+            document.getElementById('bVal').innerText = bit;
+            params.encodings = [{ maxBitrate: bit * 1000 }];
+            await sender.setParameters(params);
+        }
 
-        socket.on('signal', async (data) => {
-            if (data.sdp) {
-                await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-                if (data.sdp.type === 'offer') {
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    socket.emit('signal', { roomId, content: { sdp: answer } });
+        function startStats() {
+            setInterval(async () => {
+                const stats = await pc.getStats();
+                stats.forEach(report => {
+                    if (report.type === 'outbound-rtp' && report.kind === 'video') {
+                        document.getElementById('s-res').innerText = report.frameWidth + "x" + report.frameHeight;
+                        document.getElementById('s-fps').innerText = Math.round(report.framesPerSecond || 0) + " FPS";
+                        document.getElementById('s-bit').innerText = Math.round(report.bytesSent / 1024) + " kbps";
+                    }
+                });
+            }, 1000);
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('cameraSelect').onchange = startCamera;
+        document.getElementById('aspectSelect').onchange = startCamera;
+        document.getElementById('bitrate').onchange = applyBitrate;
+        
+        document.getElementById('showAdv').onclick = () => {
+            const d = document.getElementById('adv-drawer');
+            d.style.display = d.style.display === 'block' ? 'none' : 'block';
+        };
+
+        document.getElementById('zoom').oninput = (e) => {
+            document.getElementById('zVal').innerText = e.target.value + "x";
+            videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
+        };
+
+        let torchOn = false;
+        document.getElementById('toggleTorch').onclick = () => {
+            torchOn = !torchOn;
+            videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+        };
+
+        // Standard WebRTC Handshake
+        socket.on('peer-ready', () => role === 'view' && socket.emit('signal', { roomId, content: { type: 'RE' } }));
+        socket.on('signal', async (d) => {
+            if (d.type === 'RE' && role === 'push') {
+                const o = await pc.createOffer(); await pc.setLocalDescription(o);
+                socket.emit('signal', { roomId, content: { sdp: o } });
+            } else if (d.sdp) {
+                await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
+                if (d.sdp.type === 'offer') {
+                    const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+                    socket.emit('signal', { roomId, content: { sdp: a } });
                 }
-            } else if (data.candidate) {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-            }
+            } else if (d.candidate) pc.addIceCandidate(new RTCIceCandidate(d.candidate));
         });
 
-        document.getElementById('refreshBtn').onclick = startCam;
         init();
     </script>
 </body>
