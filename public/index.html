@@ -3,221 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DANASIRI | MULTI-LENS STUDIO</title>
+    <title>DANASIRI | PRO STUDIO</title>
     <style>
         :root { --accent: #00ffa3; --bg: #0a0a0a; --panel: rgba(15, 15, 15, 0.95); }
-        body { margin:0; background: var(--bg); color: #eee; font-family: 'Segoe UI', sans-serif; overflow:hidden; }
-        #ui { position:fixed; top:10px; left:10px; z-index:100; background: var(--panel); padding:12px; border-radius:10px; border: 1px solid #333; width: 280px; box-shadow: 0 8px 32px rgba(0,0,0,0.8); }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .logo { color: var(--accent); font-weight: bold; font-size: 12px; text-transform: uppercase; }
-        video { width:100vw; height:100vh; object-fit:cover; background:#000; }
-        .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
-        .btn, .select-input { background:#222; color:#fff; border:1px solid #444; padding:10px 5px; cursor:pointer; font-size:11px; border-radius:6px; font-weight:bold; width: 100%; box-sizing: border-box; }
-        .btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-        #adv-drawer { display: none; margin-top: 15px; border-top: 1px solid #333; padding-top: 10px; }
-        .setting-item { margin-bottom: 12px; }
-        .setting-label { display: flex; justify-content: space-between; font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
-        input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
-        #stats { font-size: 9px; color: #666; margin-top: 8px; display: flex; gap: 10px; }
+        body { margin:0; background: var(--bg); color: #eee; font-family: sans-serif; overflow:hidden; }
+        #v { width:100vw; height:100vh; object-fit:cover; background:#000; position:fixed; top:0; left:0; z-index:1; }
+        #push-ui { 
+            position:fixed; top:20px; left:20px; z-index:100; 
+            background: var(--panel); padding:15px; border-radius:12px; 
+            border: 1px solid #333; width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        }
+        .setting-group { margin-bottom: 12px; }
+        label { display: block; font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; }
+        select, button { width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        .btn-primary { border-color: var(--accent); color: var(--accent); margin-top: 10px; font-weight: bold; }
+        input[type=range] { width: 100%; accent-color: var(--accent); }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <header>
-            <div class="logo">Danasiri Multi-Lens</div>
-            <div id="status-dot" style="width:8px; height:8px; border-radius:50%; background:#ff4444;"></div>
-        </header>
-
-        <div id="stats">
-            <span id="stat-res">0x0</span>
-            <span id="stat-fps">0 FPS</span>
-            <span id="stat-bit">0 kbps</span>
-        </div>
-
-        <div id="push-ui" style="display:none;">
-            <div class="setting-item" style="margin-top:10px;">
-                <div class="setting-label">Active Camera LENS</div>
-                <select id="cameraSelect" class="select-input">
-                    <option value="">Detecting Cameras...</option>
-                </select>
-            </div>
-
-            <div class="ctrl-grid">
-                <button id="toggleMic" class="btn active">Mic ON</button>
-                <button id="toggleCam" class="btn active">Cam ON</button>
-                <button id="toggleAdv" class="btn" style="grid-column: span 2; border-color: var(--accent);">Advanced Controls</button>
-            </div>
-
-            <div id="adv-drawer">
-                <div class="setting-item">
-                    <div class="setting-label">Bitrate <span id="v-bit">8000</span>k</div>
-                    <input type="range" id="bitrate" min="1000" max="20000" step="500" value="8000">
-                </div>
-                <div id="zoom-box" class="setting-item" style="display:none;">
-                    <div class="setting-label">Zoom <span id="v-zoom">1</span>x</div>
-                    <input type="range" id="zoom" min="1" max="10" step="0.1" value="1">
-                </div>
-                <button id="toggleTorch" class="btn" style="display:none; margin-bottom:10px;">Flashlight: OFF</button>
-            </div>
-            <button id="disconnectBtn" class="btn" style="width:100%; margin-top:10px; color:#ff4444; border-color:#441111;">End Stream</button>
-        </div>
-    </div>
-
     <video id="v" autoplay playsinline muted></video>
+
+    <div id="push-ui">
+        <div style="color:var(--accent); font-weight:bold; font-size:12px; margin-bottom:15px;">DANASIRI PRO v2</div>
+        
+        <div class="setting-group">
+            <label>Camera Lens</label>
+            <select id="cameraSelect"></select>
+        </div>
+
+        <div class="setting-group">
+            <label>Aspect Ratio</label>
+            <select id="aspectSelect">
+                <option value="1.7777777778">16:9 (Wide)</option>
+                <option value="0.5625">9:16 (Vertical)</option>
+                <option value="1.3333333333">4:3 (Standard)</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label>Zoom</label>
+            <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
+        </div>
+
+        <button id="toggleTorch" style="display:none; margin-top:5px;">Flashlight</button>
+        <button id="refreshBtn" class="btn-primary">Apply Changes</button>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io({ transports: ['websocket'] });
-        const role = new URLSearchParams(window.location.search).get('role');
         const roomId = window.location.pathname.split('/')[1] || 'lobby';
-        const videoEl = document.getElementById('v');
-        
-        let pc, localStream, videoTrack;
-        const cameraSelect = document.getElementById('cameraSelect');
-
-        const config = {
-            iceServers: [
-                { urls: "stun:stun.relay.metered.ca:80" },
-                { urls: "turn:global.relay.metered.ca:80", username: "101d4507c88455da847c6923", credential: "mCRxx8b40O+Flt6A" },
-                { urls: "turn:global.relay.metered.ca:443", username: "101d4507c88455da847c6923", credential: "mCRxx8b40O+Flt6A" }
-            ],
-            iceTransportPolicy: 'all'
-        };
+        const role = new URLSearchParams(window.location.search).get('role') || 'push';
+        let localStream, videoTrack;
 
         async function init() {
-            pc = new RTCPeerConnection(config);
-            pc.onicecandidate = (e) => e.candidate && socket.emit('signal', { roomId, content: { candidate: e.candidate } });
-            pc.onconnectionstatechange = () => {
-                const s = pc.connectionState.toUpperCase();
-                document.getElementById('status-dot').style.background = s === 'CONNECTED' ? '#00ffa3' : '#ff4444';
-                if(s === 'CONNECTED' && role === 'push') { applyBitrate(); startStats(); }
-            };
-
-            if (role === 'push') {
-                document.getElementById('push-ui').style.display = 'block';
-                await enumerateCameras();
-                await startCamera();
-            } else {
-                videoEl.muted = false;
-                pc.ontrack = (e) => { videoEl.srcObject = e.streams[0]; startStats(); };
+            if (role !== 'push') {
+                document.getElementById('push-ui').style.display = 'none';
+                return;
             }
+            await getDevices();
+            await startCam();
             socket.emit('join-room', roomId);
         }
 
-        async function enumerateCameras() {
+        async function getDevices() {
             const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            cameraSelect.innerHTML = '';
-            
-            videoDevices.forEach((device, index) => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                // Clean up labels for a professional look
-                let label = device.label || `Camera ${index}`;
-                if (label.toLowerCase().includes('back')) label = `Back Lens ${index}`;
-                if (label.toLowerCase().includes('front')) label = `Front Lens ${index}`;
-                option.text = label;
-                cameraSelect.appendChild(option);
-            });
+            const vids = devices.filter(d => d.kind === 'videoinput');
+            const sel = document.getElementById('cameraSelect');
+            sel.innerHTML = vids.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
         }
 
-        async function startCamera(deviceId = null) {
+        async function startCam() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
             
             const constraints = {
-                audio: { echoCancellation: false, noiseSuppression: false },
-                video: deviceId ? { deviceId: { exact: deviceId }, width: 1920, height: 1080 } 
-                                : { facingMode: "environment", width: 1920, height: 1080 }
+                video: {
+                    deviceId: { exact: document.getElementById('cameraSelect').value },
+                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) },
+                    width: { ideal: 1920 }
+                },
+                audio: true
             };
 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoEl.srcObject = localStream;
-                videoTrack = localStream.getVideoTracks()[0];
-                
-                checkHardware(videoTrack);
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            document.getElementById('v').srcObject = localStream;
+            videoTrack = localStream.getVideoTracks()[0];
 
-                const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-                sender ? sender.replaceTrack(videoTrack) : localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-            } catch (e) { alert("Camera failed: " + e.message); }
-        }
-
-        function checkHardware(track) {
-            const caps = track.getCapabilities ? track.getCapabilities() : {};
-            document.getElementById('zoom-box').style.display = caps.zoom ? 'block' : 'none';
+            // Zoom support check
+            const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
             if (caps.zoom) {
                 const z = document.getElementById('zoom');
-                z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step;
+                z.min = caps.zoom.min; z.max = caps.zoom.max;
             }
             document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
         }
 
-        // Camera Selection Event
-        cameraSelect.onchange = () => startCamera(cameraSelect.value);
-
-        // Advanced Settings Drawer
-        document.getElementById('toggleAdv').onclick = () => {
-            const d = document.getElementById('adv-drawer');
-            d.style.display = d.style.display === 'none' ? 'block' : 'none';
-        };
-
-        // Hardware Controls
+        document.getElementById('refreshBtn').onclick = startCam;
         document.getElementById('zoom').oninput = (e) => {
-            document.getElementById('v-zoom').innerText = e.target.value;
             videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
         };
 
-        let torchOn = false;
-        document.getElementById('toggleTorch').onclick = (e) => {
-            torchOn = !torchOn;
-            videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
-            e.target.innerText = torchOn ? "Flashlight: ON" : "Flashlight: OFF";
-            e.target.classList.toggle('active');
+        let torch = false;
+        document.getElementById('toggleTorch').onclick = () => {
+            torch = !torch;
+            videoTrack.applyConstraints({ advanced: [{ torch: torch }] });
         };
-
-        // Standard Handshake & Stats
-        async function applyBitrate() {
-            const s = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (s) {
-                const p = s.getParameters();
-                const b = document.getElementById('bitrate').value;
-                document.getElementById('v-bit').innerText = b;
-                p.encodings = [{ maxBitrate: b * 1000 }];
-                await s.setParameters(p);
-            }
-        }
-
-        function startStats() {
-            setInterval(async () => {
-                const s = await pc.getStats();
-                s.forEach(r => {
-                    if ((r.type === 'outbound-rtp' || r.type === 'inbound-rtp') && r.kind === 'video') {
-                        if (r.bytesSent) document.getElementById('stat-bit').innerText = Math.round(r.bytesSent/1024) + " kbps";
-                        document.getElementById('stat-res').innerText = r.frameWidth + "x" + r.frameHeight;
-                        document.getElementById('stat-fps').innerText = Math.round(r.framesPerSecond || 0) + " FPS";
-                    }
-                });
-            }, 1000);
-        }
-
-        socket.on('peer-ready', () => role === 'view' && socket.emit('signal', { roomId, content: { type: 'RE' } }));
-        socket.on('signal', async (d) => {
-            if (d.type === 'RE' && role === 'push') {
-                const o = await pc.createOffer(); await pc.setLocalDescription(o);
-                socket.emit('signal', { roomId, content: { sdp: o } });
-            } else if (d.sdp) {
-                await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
-                if (d.sdp.type === 'offer') {
-                    const a = await pc.createAnswer(); await pc.setLocalDescription(a);
-                    socket.emit('signal', { roomId, content: { sdp: a } });
-                }
-            } else if (d.candidate) pc.addIceCandidate(new RTCIceCandidate(d.candidate));
-        });
-
-        document.getElementById('bitrate').onchange = applyBitrate;
-        document.getElementById('toggleMic').onclick = (e) => { const t = localStream.getAudioTracks()[0]; t.enabled = !t.enabled; e.target.classList.toggle('active'); };
-        document.getElementById('toggleCam').onclick = (e) => { const t = localStream.getVideoTracks()[0]; t.enabled = !t.enabled; e.target.classList.toggle('active'); };
-        document.getElementById('disconnectBtn').onclick = () => location.reload();
 
         init();
     </script>
