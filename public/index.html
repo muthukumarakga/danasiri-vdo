@@ -42,6 +42,17 @@
                 </select>
             </div>
 
+            <!-- Added Aspect Ratio Selection -->
+            <div class="setting-item">
+                <div class="setting-label">Aspect Ratio</div>
+                <select id="aspectSelect" class="select-input">
+                    <option value="1.7777777778">16:9 (Widescreen)</option>
+                    <option value="0.5625">9:16 (Vertical/TikTok)</option>
+                    <option value="1.3333333333">4:3 (Classic)</option>
+                    <option value="1">1:1 (Square)</option>
+                </select>
+            </div>
+
             <div class="ctrl-grid">
                 <button id="toggleMic" class="btn active">Mic ON</button>
                 <button id="toggleCam" class="btn active">Cam ON</button>
@@ -74,6 +85,7 @@
         
         let pc, localStream, videoTrack;
         const cameraSelect = document.getElementById('cameraSelect');
+        const aspectSelect = document.getElementById('aspectSelect');
 
         const config = {
             iceServers: [
@@ -112,7 +124,6 @@
             videoDevices.forEach((device, index) => {
                 const option = document.createElement('option');
                 option.value = device.deviceId;
-                // Clean up labels for a professional look
                 let label = device.label || `Camera ${index}`;
                 if (label.toLowerCase().includes('back')) label = `Back Lens ${index}`;
                 if (label.toLowerCase().includes('front')) label = `Front Lens ${index}`;
@@ -121,13 +132,21 @@
             });
         }
 
-        async function startCamera(deviceId = null) {
+        async function startCamera() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
             
+            const selectedDevice = cameraSelect.value;
+            const selectedAspect = parseFloat(aspectSelect.value);
+
             const constraints = {
                 audio: { echoCancellation: false, noiseSuppression: false },
-                video: deviceId ? { deviceId: { exact: deviceId }, width: 1920, height: 1080 } 
-                                : { facingMode: "environment", width: 1920, height: 1080 }
+                video: {
+                    deviceId: selectedDevice ? { exact: selectedDevice } : undefined,
+                    facingMode: selectedDevice ? undefined : "environment",
+                    aspectRatio: { ideal: selectedAspect },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
             };
 
             try {
@@ -152,16 +171,15 @@
             document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
         }
 
-        // Camera Selection Event
-        cameraSelect.onchange = () => startCamera(cameraSelect.value);
+        // Event Listeners for camera and aspect ratio
+        cameraSelect.onchange = startCamera;
+        aspectSelect.onchange = startCamera;
 
-        // Advanced Settings Drawer
         document.getElementById('toggleAdv').onclick = () => {
             const d = document.getElementById('adv-drawer');
             d.style.display = d.style.display === 'none' ? 'block' : 'none';
         };
 
-        // Hardware Controls
         document.getElementById('zoom').oninput = (e) => {
             document.getElementById('v-zoom').innerText = e.target.value;
             videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
@@ -175,7 +193,6 @@
             e.target.classList.toggle('active');
         };
 
-        // Standard Handshake & Stats
         async function applyBitrate() {
             const s = pc.getSenders().find(s => s.track?.kind === 'video');
             if (s) {
