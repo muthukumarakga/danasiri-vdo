@@ -1,14 +1,13 @@
 const express = require('express');
-const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http, { 
-    cors: { origin: "*" },
-    transports: ['websocket'] 
-});
+const io = require('socket.io')(http, { cors: { origin: "*" } });
+const path = require('path');
 
+// Serve files from the 'public' folder
 app.use(express.static('public'));
 
+// This handles the room-based URL (e.g., /studio)
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -16,8 +15,7 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        // Alert the room that someone is ready to sync
-        socket.to(roomId).emit('peer-ready', socket.id);
+        socket.to(roomId).emit('peer-ready');
     });
 
     socket.on('signal', (data) => {
@@ -25,7 +23,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`[DANASIRI STUDIO] SYSTEM LIVE ON PORT ${PORT}`);
+    console.log(`SERVER RUNNING ON PORT ${PORT}`);
 });
