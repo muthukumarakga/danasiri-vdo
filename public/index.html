@@ -5,18 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DANASIRI | PRO STUDIO</title>
     <style>
-        :root { --accent: #00ffa3; --bg: #0a0a0a; --panel: rgba(15, 15, 15, 0.95); }
+        :root { --accent: #00ffa3; --bg: #0a0a0a; }
         body { margin:0; background: var(--bg); color: #eee; font-family: sans-serif; overflow:hidden; }
-        #v { width:100vw; height:100vh; object-fit:cover; background:#000; position:fixed; top:0; left:0; z-index:1; }
+        #v { width:100vw; height:100vh; object-fit:cover; position:fixed; top:0; left:0; z-index:1; }
         #push-ui { 
             position:fixed; top:20px; left:20px; z-index:100; 
-            background: var(--panel); padding:15px; border-radius:12px; 
-            border: 1px solid #333; width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+            background: rgba(15,15,15,0.9); padding:15px; border-radius:12px; 
+            border: 1px solid #333; width: 260px;
         }
-        .setting-group { margin-bottom: 12px; }
-        label { display: block; font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; }
-        select, button { width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-        .btn-primary { border-color: var(--accent); color: var(--accent); margin-top: 10px; font-weight: bold; }
+        .label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 5px; display:block; }
+        select, button { width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; cursor: pointer; }
+        .btn-apply { border-color: var(--accent); color: var(--accent); font-weight: bold; }
         input[type=range] { width: 100%; accent-color: var(--accent); }
     </style>
 </head>
@@ -24,29 +23,23 @@
     <video id="v" autoplay playsinline muted></video>
 
     <div id="push-ui">
-        <div style="color:var(--accent); font-weight:bold; font-size:12px; margin-bottom:15px;">DANASIRI PRO v2</div>
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:15px;">DANASIRI PRO v2</div>
         
-        <div class="setting-group">
-            <label>Camera Lens</label>
-            <select id="cameraSelect"></select>
-        </div>
+        <span class="label">Hardware Lens</span>
+        <select id="cameraSelect"></select>
 
-        <div class="setting-group">
-            <label>Aspect Ratio</label>
-            <select id="aspectSelect">
-                <option value="1.7777777778">16:9 (Wide)</option>
-                <option value="0.5625">9:16 (Vertical)</option>
-                <option value="1.3333333333">4:3 (Standard)</option>
-            </select>
-        </div>
+        <span class="label">Aspect Ratio</span>
+        <select id="aspectSelect">
+            <option value="1.7777777778">16:9 Widescreen</option>
+            <option value="0.5625">9:16 Vertical</option>
+            <option value="1.3333333333">4:3 Standard</option>
+        </select>
 
-        <div class="setting-group">
-            <label>Zoom</label>
-            <input type="range" id="zoom" min="1" max="5" step="0.1" value="1">
-        </div>
+        <span class="label">Zoom Control</span>
+        <input type="range" id="zoom" min="1" max="10" step="0.1" value="1">
 
-        <button id="toggleTorch" style="display:none; margin-top:5px;">Flashlight</button>
-        <button id="refreshBtn" class="btn-primary">Apply Changes</button>
+        <button id="refreshBtn" class="btn-apply">APPLY SETTINGS</button>
+        <button id="toggleTorch" style="display:none;">FLASHLIGHT</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -59,23 +52,19 @@
         async function init() {
             if (role !== 'push') {
                 document.getElementById('push-ui').style.display = 'none';
-                return;
+                return; 
             }
-            await getDevices();
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const vids = devices.filter(d => d.kind === 'videoinput');
+            document.getElementById('cameraSelect').innerHTML = vids.map((d, i) => 
+                `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
+            
             await startCam();
             socket.emit('join-room', roomId);
         }
 
-        async function getDevices() {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const vids = devices.filter(d => d.kind === 'videoinput');
-            const sel = document.getElementById('cameraSelect');
-            sel.innerHTML = vids.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
-        }
-
         async function startCam() {
             if (localStream) localStream.getTracks().forEach(t => t.stop());
-            
             const constraints = {
                 video: {
                     deviceId: { exact: document.getElementById('cameraSelect').value },
@@ -84,29 +73,22 @@
                 },
                 audio: true
             };
-
-            localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            document.getElementById('v').srcObject = localStream;
-            videoTrack = localStream.getVideoTracks()[0];
-
-            // Zoom support check
-            const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-            if (caps.zoom) {
-                const z = document.getElementById('zoom');
-                z.min = caps.zoom.min; z.max = caps.zoom.max;
-            }
-            document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                document.getElementById('v').srcObject = localStream;
+                videoTrack = localStream.getVideoTracks()[0];
+                const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+                if (caps.zoom) {
+                    document.getElementById('zoom').min = caps.zoom.min;
+                    document.getElementById('zoom').max = caps.zoom.max;
+                }
+                document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
+            } catch (e) { alert("Lens error: " + e.message); }
         }
 
         document.getElementById('refreshBtn').onclick = startCam;
         document.getElementById('zoom').oninput = (e) => {
             videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
-        };
-
-        let torch = false;
-        document.getElementById('toggleTorch').onclick = () => {
-            torch = !torch;
-            videoTrack.applyConstraints({ advanced: [{ torch: torch }] });
         };
 
         init();
