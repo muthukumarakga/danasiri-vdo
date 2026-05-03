@@ -1,161 +1,101 @@
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io({ transports: ['websocket'] });
-    const params = new URLSearchParams(window.location.search);
-    const role = params.get('role') || 'push';
-    const roomId = window.location.pathname.split('/')[1] || 'lobby';
-    
-    let pc, localStream, videoTrack;
-    const videoEl = document.getElementById('v');
-
-    const rtcConfig = {
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    };
-
-    async function init() {
-        // 1. Setup Peer Connection
-        pc = new RTCPeerConnection(rtcConfig);
-        
-        // 2. Handle ICE Candidates (Connection paths)
-        pc.onicecandidate = (e) => {
-            if (e.candidate) {
-                socket.emit('signal', { roomId, content: { candidate: e.candidate } });
-            }
-        };
-        
-        // 3. Status indicator
-        pc.onconnectionstatechange = () => {
-            const dot = document.getElementById('status-dot');
-            if(dot) dot.style.background = pc.connectionState === 'connected' ? '#00ffa3' : '#ff4444';
-            if(pc.connectionState === 'connected') startStats();
-        };
-
-        // 4. Handle incoming video for VIEWERS
-        pc.ontrack = (e) => {
-            console.log("Stream received!");
-            videoEl.srcObject = e.streams[0];
-        };
-
-        // 5. Setup based on ROLE
-        if (role === 'push') {
-            await enumerateCameras();
-            await startCamera();
-        } else {
-            document.getElementById('push-ui').style.display = 'none';
-            videoEl.muted = false; // Viewers need sound
-            // Viewer creates the initial "RE" request
-            console.log("Viewer joining, requesting stream...");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DANASIRI | PRO STUDIO</title>
+    <style>
+        :root { --accent: #00ffa3; --bg: #0a0a0a; }
+        body { margin:0; background: var(--bg); color: #eee; font-family: sans-serif; overflow:hidden; }
+        #v { width:100vw; height:100vh; object-fit:cover; background:#000; position:fixed; top:0; left:0; z-index:1; }
+        #push-ui { 
+            position:fixed; top:20px; left:20px; z-index:100; 
+            background: rgba(15, 15, 15, 0.9); padding:15px; border-radius:12px; 
+            border: 1px solid #333; width: 250px; 
         }
-        
-        socket.emit('join-room', roomId);
-    }
-
-    // --- Signaling Logic (The Handshake) ---
-    socket.on('peer-ready', async () => {
-        // If someone joins and we are the PUSH, send them an offer
-        if (role === 'push' && localStream) {
-            console.log("New viewer detected, creating offer...");
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit('signal', { roomId, content: { sdp: offer } });
+        select, button { 
+            width: 100%; background: #222; color: #fff; border: 1px solid #444; 
+            padding: 10px; border-radius: 6px; margin-bottom: 10px; cursor: pointer;
         }
-    });
+        .btn-primary { border-color: var(--accent); color: var(--accent); font-weight: bold; }
+        label { font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <video id="v" autoplay playsinline muted></video>
 
-    socket.on('signal', async (d) => {
-        if (d.sdp) {
-            await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
-            if (d.sdp.type === 'offer') {
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                socket.emit('signal', { roomId, content: { sdp: answer } });
+    <div id="push-ui">
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:15px;">DANASIRI STUDIO</div>
+        <label>Camera Lens</label>
+        <select id="cameraSelect"></select>
+        <label>Aspect Ratio</label>
+        <select id="aspectSelect">
+            <option value="1.7777777778">16:9 (Widescreen)</option>
+            <option value="0.5625">9:16 (Vertical)</option>
+        </select>
+        <button id="refreshBtn" class="btn-primary">APPLY CAMERA</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io({ transports: ['websocket'] });
+        const roomId = window.location.pathname.split('/')[1] || 'lobby';
+        const role = new URLSearchParams(window.location.search).get('role') || 'push';
+        let pc, localStream;
+
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+        async function init() {
+            pc = new RTCPeerConnection(rtcConfig);
+            pc.onicecandidate = (e) => e.candidate && socket.emit('signal', { roomId, content: { candidate: e.candidate } });
+            pc.ontrack = (e) => { if (role === 'view') document.getElementById('v').srcObject = e.streams[0]; };
+
+            if (role === 'push') {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const vids = devices.filter(d => d.kind === 'videoinput');
+                document.getElementById('cameraSelect').innerHTML = vids.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
+                await startCam();
+            } else {
+                document.getElementById('push-ui').style.display = 'none';
+                document.getElementById('v').muted = false;
             }
-        } else if (d.candidate) {
-            try {
-                await pc.addIceCandidate(new RTCIceCandidate(d.candidate));
-            } catch(e) { console.error("ICE Error", e); }
+            socket.emit('join-room', roomId);
         }
-    });
 
-    // --- Camera Functions ---
-    async function enumerateCameras() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const vids = devices.filter(d => d.kind === 'videoinput');
-        const sel = document.getElementById('cameraSelect');
-        sel.innerHTML = '';
-        vids.forEach((d, i) => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.text = d.label || `Camera ${i}`;
-            sel.appendChild(opt);
-        });
-    }
-
-    async function startCamera() {
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
-        
-        const constraints = {
-            audio: true,
-            video: {
-                deviceId: { exact: document.getElementById('cameraSelect').value },
-                aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) },
-                width: { ideal: 1920 }
-            }
-        };
-
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            videoEl.srcObject = localStream;
-            videoTrack = localStream.getVideoTracks()[0];
-            
-            // Add track to existing connection
-            localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-            
-            // Hardware controls
-            const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-            if (caps.zoom) {
-                const z = document.getElementById('zoom');
-                z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step;
-            }
-            document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
-            applyBitrate();
-        } catch (e) { console.error("Camera Error", e); }
-    }
-
-    // --- Stats & Helpers ---
-    async function applyBitrate() {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (!sender) return;
-        const p = sender.getParameters();
-        const bit = document.getElementById('bitrate').value;
-        document.getElementById('bVal').innerText = bit;
-        p.encodings = [{ maxBitrate: bit * 1000 }];
-        await sender.setParameters(p);
-    }
-
-    function startStats() {
-        setInterval(async () => {
-            const stats = await pc.getStats();
-            stats.forEach(r => {
-                if (r.type === 'outbound-rtp' && r.kind === 'video') {
-                    document.getElementById('s-res').innerText = r.frameWidth + "x" + r.frameHeight;
-                    document.getElementById('s-fps').innerText = Math.round(r.framesPerSecond || 0) + " FPS";
-                    document.getElementById('s-bit').innerText = Math.round(r.bytesSent / 1024) + " kbps";
-                }
+        async function startCam() {
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { 
+                    deviceId: { exact: document.getElementById('cameraSelect').value },
+                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) }
+                },
+                audio: true
             });
-        }, 1000);
-    }
+            document.getElementById('v').srcObject = localStream;
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        }
 
-    document.getElementById('cameraSelect').onchange = startCamera;
-    document.getElementById('aspectSelect').onchange = startCamera;
-    document.getElementById('bitrate').onchange = applyBitrate;
-    document.getElementById('showAdv').onclick = () => {
-        const d = document.getElementById('adv-drawer');
-        d.style.display = d.style.display === 'block' ? 'none' : 'block';
-    };
-    document.getElementById('zoom').oninput = (e) => {
-        document.getElementById('zVal').innerText = e.target.value + "x";
-        videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
-    };
+        socket.on('peer-ready', async () => {
+            if (role === 'push') {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('signal', { roomId, content: { sdp: offer } });
+            }
+        });
 
-    init();
-</script>
+        socket.on('signal', async (data) => {
+            if (data.sdp) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                if (data.sdp.type === 'offer') {
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    socket.emit('signal', { roomId, content: { sdp: answer } });
+                }
+            } else if (data.candidate) pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        });
+
+        document.getElementById('refreshBtn').onclick = startCam;
+        init();
+    </script>
+</body>
+</html>
