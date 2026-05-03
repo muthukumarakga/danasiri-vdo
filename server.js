@@ -6,6 +6,7 @@ const path = require('path');
 
 app.use(express.static('public'));
 
+// Route to handle any room name
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -13,17 +14,16 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId) => {
         socket.join(roomId);
-        // Tell the broadcaster a viewer is ready to receive
-        socket.to(roomId).emit('peer-ready'); 
+        socket.to(roomId).emit('peer-ready');
     });
 
     socket.on('signal', (data) => {
-        // Pass WebRTC signals (SDP/Candidates) between push and view
+        // Broadcaster sends to Viewer, Viewer sends to Broadcaster
         socket.to(data.roomId).emit('signal', data.content);
     });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`DANASIRI SERVER ONLINE: Port ${PORT}`);
+    console.log(`DANASIRI SERVER LIVE ON PORT ${PORT}`);
 });
