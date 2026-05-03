@@ -24,22 +24,17 @@
 
     <div id="push-ui">
         <div style="color:var(--accent); font-weight:bold; margin-bottom:15px;">DANASIRI PRO v2</div>
-        
         <span class="label">Hardware Lens</span>
         <select id="cameraSelect"></select>
-
         <span class="label">Aspect Ratio</span>
         <select id="aspectSelect">
             <option value="1.7777777778">16:9 Widescreen</option>
             <option value="0.5625">9:16 Vertical</option>
             <option value="1.3333333333">4:3 Standard</option>
         </select>
-
         <span class="label">Zoom Control</span>
         <input type="range" id="zoom" min="1" max="10" step="0.1" value="1">
-
         <button id="refreshBtn" class="btn-apply">APPLY SETTINGS</button>
-        <button id="toggleTorch" style="display:none;">FLASHLIGHT</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -47,20 +42,38 @@
         const socket = io({ transports: ['websocket'] });
         const roomId = window.location.pathname.split('/')[1] || 'lobby';
         const role = new URLSearchParams(window.location.search).get('role') || 'push';
-        let localStream, videoTrack;
+        let pc, localStream, videoTrack;
+
+        const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
         async function init() {
-            if (role !== 'push') {
+            pc = new RTCPeerConnection(rtcConfig);
+            
+            // Send ICE candidates to the other peer
+            pc.onicecandidate = (e) => e.candidate && socket.emit('signal', { roomId, content: { candidate: e.candidate } });
+            
+            // For the viewer: catch the incoming stream
+            pc.ontrack = (e) => {
+                if (role === 'view') document.getElementById('v').srcObject = e.streams[0];
+            };
+
+            if (role === 'push') {
+                await setupCamera();
+            } else {
+                // Viewer mode: hide UI and unmute audio
                 document.getElementById('push-ui').style.display = 'none';
-                return; 
+                document.getElementById('v').muted = false;
             }
+
+            socket.emit('join-room', roomId);
+        }
+
+        async function setupCamera() {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const vids = devices.filter(d => d.kind === 'videoinput');
-            document.getElementById('cameraSelect').innerHTML = vids.map((d, i) => 
-                `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
-            
+            const sel = document.getElementById('cameraSelect');
+            sel.innerHTML = vids.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Lens ' + i}</option>`).join('');
             await startCam();
-            socket.emit('join-room', roomId);
         }
 
         async function startCam() {
@@ -68,29 +81,41 @@
             const constraints = {
                 video: {
                     deviceId: { exact: document.getElementById('cameraSelect').value },
-                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) },
-                    width: { ideal: 1920 }
+                    aspectRatio: { ideal: parseFloat(document.getElementById('aspectSelect').value) }
                 },
                 audio: true
             };
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('v').srcObject = localStream;
-                videoTrack = localStream.getVideoTracks()[0];
-                const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-                if (caps.zoom) {
-                    document.getElementById('zoom').min = caps.zoom.min;
-                    document.getElementById('zoom').max = caps.zoom.max;
-                }
-                document.getElementById('toggleTorch').style.display = caps.torch ? 'block' : 'none';
-            } catch (e) { alert("Lens error: " + e.message); }
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            document.getElementById('v').srcObject = localStream;
+            videoTrack = localStream.getVideoTracks()[0];
+            
+            // Add tracks to the peer connection
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
         }
 
-        document.getElementById('refreshBtn').onclick = startCam;
-        document.getElementById('zoom').oninput = (e) => {
-            videoTrack.applyConstraints({ advanced: [{ zoom: e.target.value }] });
-        };
+        // --- Signaling Logic ---
+        socket.on('peer-ready', async () => {
+            if (role === 'push') {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('signal', { roomId, content: { sdp: offer } });
+            }
+        });
 
+        socket.on('signal', async (data) => {
+            if (data.sdp) {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                if (data.sdp.type === 'offer') {
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    socket.emit('signal', { roomId, content: { sdp: answer } });
+                }
+            } else if (data.candidate) {
+                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        });
+
+        document.getElementById('refreshBtn').onclick = startCam;
         init();
     </script>
 </body>
