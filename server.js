@@ -4,10 +4,10 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, { cors: { origin: "*" } });
 const path = require('path');
 
-// Serve files from the 'public' folder
+// Crucial: This tells the server to look in the 'public' folder for index.html
 app.use(express.static('public'));
 
-// This handles the room-based URL (e.g., /studio)
+// Enables custom room names in the URL
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -25,5 +25,5 @@ io.on('connection', (socket) => {
 
 const PORT = 3000;
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`SERVER RUNNING ON PORT ${PORT}`);
+    console.log(`DANASIRI SERVER ONLINE: Port ${PORT}`);
 });
